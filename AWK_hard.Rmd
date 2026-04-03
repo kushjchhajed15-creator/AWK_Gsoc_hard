@@ -1,0 +1,96 @@
+---
+title: "Hard Task: Translating R Conditions to AWK"
+author: "Your Name"
+output: html_document
+---
+
+```{r setup, message=FALSE, warning=FALSE}
+library(data.table)
+library(ggplot2)
+
+data("diamonds", package = "ggplot2")
+fwrite(diamonds, "diamonds.csv")
+```
+## The MAIN CODE 
+```{r}
+
+translate_to_awk <- function(condition) {
+  
+  col_map <- list(
+    carat = "$1",
+    cut = "$2",
+    color = "$3",
+    clarity = "$4",
+    depth = "$5",
+    table = "$6",
+    price = "$7",
+    x = "$8",
+    y = "$9",
+    z = "$10"
+  )
+  
+  awk_cond <- condition
+  
+  # Replace column names
+  for (col in names(col_map)) {
+    awk_cond <- gsub(paste0("\\b", col, "\\b"), col_map[[col]], awk_cond)
+  }
+  
+  # Logical operators
+  awk_cond <- gsub(" and ", " && ", awk_cond)
+  awk_cond <- gsub(" or ", " || ", awk_cond)
+  
+
+  awk_cond <- gsub("'([^']*)'", "\"\\1\"", awk_cond)
+  
+  # Convert == "value" → ~ /^value$/
+  awk_cond <- gsub("== \"([^\"]+)\"", "~ /^\\1$/", awk_cond)
+  
+  # Handle %in%
+  awk_cond <- gsub(
+    "\\$([0-9]+) %in% c\\(\"([^\"]+)\", \"([^\"]+)\"\\)",
+    "(\\$\\1 ~ /^\\2$/ || \\$\\1 ~ /^\\3$/)",
+    awk_cond
+  )
+  
+  return(awk_cond)
+}
+
+```
+
+#  Case 1]
+```{r}
+cond1 <- "price >= 1000"
+awk1 <- translate_to_awk(cond1)
+awk1
+```
+# The feeding command 
+```{r}
+cmd1 <- sprintf("awk -F ',' \"%s\" diamonds.csv", awk1)
+res1 <- fread(cmd = cmd1)
+head(res1)
+```
+
+#  Case 2]
+```{r}
+cond2 <- "carat <= 1 and color == 'E'"
+awk2 <- translate_to_awk(cond2)
+awk2
+```
+```{r}
+cmd2 <- sprintf("awk -F ',' \"%s\" diamonds.csv", awk2)
+res2 <- fread(cmd = cmd2)
+print(res2)    # instead of head ,used print to check more color at >=1000
+```
+
+#  Case 3]
+```{r}
+cond3 <- "cut %in% c('Premium', 'Ideal')"
+awk3 <- translate_to_awk(cond3)
+awk3
+```
+```{r}
+cmd3 <- sprintf("awk -F ',' \"%s\" diamonds.csv", awk3)
+res3 <- fread(cmd = cmd3)
+head(res3)
+```
